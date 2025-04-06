@@ -1,0 +1,19 @@
+{% extends 'ml_app/base.html' %}
+
+{% block title %}업로드 완료{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 text-center">
+        <div class="alert alert-success" role="alert">
+            <h4 class="alert-heading">업로드 성공!</h4>
+            <p>이미지가 성공적으로 업로드되었습니다.</p>
+        </div>
+        
+        <div class="mt-4">
+            <a href="{% url 'upload' %}" class="btn btn-primary">더 많은 이미지 업로드하기</a>
+            <a href="{% url 'training' %}" class="btn btn-success ms-2">모델 학습하기</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

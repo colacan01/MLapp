@@ -1,0 +1,230 @@
+{% extends 'ml_app/base.html' %}
+
+{% block title %}이미지 테스트{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1>이미지 테스트</h1>
+        <p>학습된 모델을 이용해 새로운 이미지를 분류할 수 있습니다.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">이미지 업로드</h5>
+            </div>
+            <div class="card-body">
+                {% if model %}
+                    <p class="mb-3">현재 활성화된 모델: <strong>{{ model.name }}</strong> (정확도: {{ model.accuracy|floatformat:2 }}%)</p>
+                    
+                    <div id="drop-area" class="drop-area">
+                        <p>여기에 이미지를 드래그 & 드롭하거나 클릭하여 선택하세요</p>
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                        <div id="preview"></div>
+                    </div>
+                    
+                    <button id="predictBtn" class="btn btn-primary w-100 mt-3" disabled>이미지 인식하기</button>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <p>학습된 모델이 없습니다. 먼저 모델을 학습해주세요.</p>
+                        <a href="{% url 'ml_app:training' %}" class="btn btn-primary mt-2">모델 학습하기</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">인식 결과</h5>
+            </div>
+            <div class="card-body">
+                <div id="result-container">
+                    <div class="text-center">
+                        <p class="text-muted">이미지를 업로드하면 결과가 여기에 표시됩니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if model %}
+<script>    
+    // 엘리먼트 선택
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+    const predictBtn = document.getElementById('predictBtn');
+    const resultContainer = document.getElementById('result-container');
+    
+    let selectedFile = null;
+    
+    // 이벤트 리스너 추가
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults);
+    });
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight);
+    });
+    
+    dropArea.addEventListener('drop', handleDrop);
+    dropArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileSelect);
+    predictBtn.addEventListener('click', predictImage);
+    
+    // 기본 동작 방지
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    // 드래그 앤 드롭 영역 강조
+    function highlight() {
+        dropArea.classList.add('highlight');
+    }
+    
+    // 드래그 앤 드롭 영역 강조 해제
+    function unhighlight() {
+        dropArea.classList.remove('highlight');
+    }
+    
+    // 파일 드롭 처리
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        
+        if (files.length > 0 && files[0].type.startsWith('image/')) {
+            handleFiles(files);
+        }
+    }
+    
+    // 파일 선택 처리
+    function handleFileSelect(e) {
+        const files = e.target.files;
+        
+        if (files.length > 0) {
+            handleFiles(files);
+        }
+    }
+    
+    // 파일 처리 및 미리보기
+    function handleFiles(files) {
+        selectedFile = files[0];
+        
+        // 미리보기 이미지 생성
+        const img = document.createElement('img');
+        img.classList.add('preview-image');
+        img.file = selectedFile;
+        
+        preview.innerHTML = '';
+        preview.appendChild(img);
+        
+        // 파일리더로 이미지 로드
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.readAsDataURL(selectedFile);
+        
+        // 예측 버튼 활성화
+        predictBtn.disabled = false;
+    }
+    
+    // 이미지 예측 함수
+    function predictImage() {
+        if (!selectedFile) {
+            return;
+        }
+        
+        // 로딩 표시
+        resultContainer.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">이미지를 분석하는 중입니다...</p>
+            </div>
+        `;
+        
+        // 예측 버튼 비활성화
+        predictBtn.disabled = true;
+        
+        // 폼 데이터 생성
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+        
+        // 예측 요청 보내기
+        fetch('{% url "ml_app:predict_image" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // 결과 표시
+                const confidence = (data.confidence * 100).toFixed(2);
+                const confidenceClass = confidence > 80 ? 'success' : (confidence > 50 ? 'warning' : 'danger');
+                
+                resultContainer.innerHTML = `
+                    <div class="text-center mb-3">
+                        <h3 class="mb-3">분류 결과</h3>
+                        <h2 class="text-primary mb-4">${data.class}</h2>
+                        
+                        <div class="progress mb-3" style="height: 25px;">
+                            <div class="progress-bar bg-${confidenceClass}" role="progressbar" 
+                                 style="width: ${confidence}%" aria-valuenow="${confidence}" 
+                                 aria-valuemin="0" aria-valuemax="100">
+                                ${confidence}%
+                            </div>
+                        </div>
+                        
+                        <p class="text-${confidenceClass}">신뢰도: ${confidence}%</p>
+                    </div>
+                    <div class="alert alert-info">
+                        <small>
+                            <strong>참고:</strong> 신뢰도가 낮은 경우, 더 많은 이미지로 모델을 학습시키면 결과가 향상될 수 있습니다.
+                        </small>
+                    </div>
+                `;
+            } else {
+                // 오류 메시지 표시
+                resultContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        <p>분석 중 오류가 발생했습니다:</p>
+                        <p>${data.message}</p>
+                    </div>
+                `;
+            }
+            
+            // 예측 버튼 다시 활성화
+            predictBtn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            
+            // 오류 메시지 표시
+            resultContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <p>네트워크 오류가 발생했습니다.</p>
+                    <p>다시 시도해주세요.</p>
+                </div>
+            `;
+            
+            // 예측 버튼 다시 활성화
+            predictBtn.disabled = false;
+        });
+    }
+    
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'ml_app/base.html' %}
+
+{% block title %}머신러닝 이미지 분류 앱{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 text-center mb-5">
+        <h1 class="display-4">머신러닝 이미지 분류 앱</h1>
+        <p class="lead">TensorFlow와 Django를 사용한 이미지 분류 웹 애플리케이션</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">이미지 업로드</h5>
+                <p class="card-text">학습할 이미지를 업로드하고 라벨을 지정하세요.</p>
+                <a href="{% url 'ml_app:upload' %}" class="btn btn-primary">업로드 시작하기</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">모델 학습</h5>
+                <p class="card-text">업로드한 이미지로 인공지능 모델을 학습하세요.</p>
+                <a href="{% url 'ml_app:training' %}" class="btn btn-primary">학습 시작하기</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">이미지 테스트</h5>
+                <p class="card-text">학습된 모델로 새로운 이미지를 분류하세요.</p>
+                <a href="{% url 'ml_app:test' %}" class="btn btn-primary">테스트 시작하기</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <h2>사용 방법</h2>
+        <ol class="list-group list-group-numbered">
+            <li class="list-group-item">1. 이미지 업로드 페이지에서 학습할 이미지와 해당 이미지의 라벨을 입력합니다.</li>
+            <li class="list-group-item">2. 각 카테고리별로 충분한 수의 이미지(최소 10개 이상 권장)를 업로드합니다.</li>
+            <li class="list-group-item">3. 모델 학습 페이지에서 학습 매개변수를 설정하고 학습을 시작합니다.</li>
+            <li class="list-group-item">4. 학습이 완료되면 이미지 테스트 페이지에서 새로운 이미지를 업로드하여 분류 결과를 확인합니다.</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,291 @@
+{% extends 'ml_app/base.html' %}
+
+{% block title %}모델 학습{% endblock %}
+
+{% block content %}
+<h2>모델 학습</h2>
+<p>이미지 분류 모델을 학습시키려면 아래 매개변수를 설정하고 학습 시작 버튼을 클릭하세요.</p>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">학습 설정</h5>
+                
+                <div class="form-group mb-3">
+                    <label for="epochs">Epochs:</label>
+                    <input type="number" class="form-control" id="epochs" value="10" min="1" max="100">
+                    <small class="form-text text-muted">전체 데이터셋을 몇 번 반복해서 학습할지 설정합니다.</small>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label for="batchSize">Batch Size:</label>
+                    <input type="number" class="form-control" id="batchSize" value="32" min="1" max="128">
+                    <small class="form-text text-muted">한 번에 처리할 이미지 수를 설정합니다.</small>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label for="learningRate">Learning Rate:</label>
+                    <input type="number" class="form-control" id="learningRate" value="0.001" min="0.0001" max="0.1" step="0.0001">
+                    <small class="form-text text-muted">학습률을 설정합니다. 일반적으로 0.001이 적합합니다.</small>
+                </div>
+                
+                <button id="startTrainingBtn" class="btn btn-primary">학습 시작</button>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">가용 라벨</h5>
+                <div id="availableLabels">
+                    {% if labels %}
+                        <ul class="list-group">
+                            {% for label in labels %}
+                                <li class="list-group-item">{{ label.name }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="alert alert-warning">업로드된 이미지 라벨이 없습니다.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">학습 진행상황</h5>
+                
+                <div id="trainingStatus">
+                    <div class="alert alert-info">
+                        학습을 시작하면 여기에 진행상황이 표시됩니다.
+                    </div>
+                </div>
+                
+                <div id="progressContainer" style="display: none;">
+                    <div class="progress mb-3">
+                        <div id="trainingProgress" class="progress-bar" role="progressbar" style="width: 0%;" 
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">정확도</h6>
+                                    <p id="accuracyValue" class="display-6 text-primary">0%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">손실</h6>
+                                    <p id="lossValue" class="display-6 text-danger">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mt-3">학습 로그</h6>
+                    <div id="trainingLog"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">학습된 모델</h5>
+                <div id="trainedModels">
+                    {% if trained_models %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>모델명</th>
+                                    <th>정확도</th>
+                                    <th>생성일</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for model in trained_models %}
+                                    <tr>
+                                        <td>{{ model.name }}</td>
+                                        <td>{{ model.accuracy|floatformat:2 }}%</td>
+                                        <td>{{ model.created_at|date:"Y-m-d H:i" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <div class="alert alert-warning">학습된 모델이 없습니다.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const startTrainingBtn = document.getElementById('startTrainingBtn');
+        const trainingStatus = document.getElementById('trainingStatus');
+        const progressContainer = document.getElementById('progressContainer');
+        const trainingProgress = document.getElementById('trainingProgress');
+        const accuracyValue = document.getElementById('accuracyValue');
+        const lossValue = document.getElementById('lossValue');
+        const trainingLog = document.getElementById('trainingLog');
+        
+        // 웹소켓 연결
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/training/`;
+        let socket = null;
+        
+        function connectWebSocket() {
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = function(e) {
+                console.log('WebSocket 연결 성공');
+            };
+            
+            socket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                updateTrainingProgress(data.message);
+            };
+            
+            socket.onclose = function(e) {
+                console.log('WebSocket 연결 종료', e);
+                // 재연결 시도
+                setTimeout(connectWebSocket, 2000);
+            };
+            
+            socket.onerror = function(e) {
+                console.error('WebSocket 오류:', e);
+            };
+        }
+        
+        connectWebSocket();
+        
+        // 학습 시작 버튼 클릭 이벤트
+        startTrainingBtn.addEventListener('click', startTraining);
+        
+        // 학습 시작 함수
+        function startTraining() {
+            const epochs = parseInt(document.getElementById('epochs').value);
+            const batchSize = parseInt(document.getElementById('batchSize').value);
+            const learningRate = parseFloat(document.getElementById('learningRate').value);
+            
+            // 유효성 검사
+            if (isNaN(epochs) || isNaN(batchSize) || isNaN(learningRate)) {
+                alert('유효한 값을 입력해주세요.');
+                return;
+            }
+            
+            // UI 업데이트
+            startTrainingBtn.disabled = true;
+            trainingStatus.innerHTML = '<div class="alert alert-info">학습을 시작합니다...</div>';
+            progressContainer.style.display = 'block';
+            trainingLog.innerHTML = '학습을 준비 중입니다...<br>';
+            
+            // API 호출
+            fetch('{% url "ml_app:start_training" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    epochs: epochs,
+                    batch_size: batchSize,
+                    learning_rate: learningRate
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    trainingStatus.innerHTML = `
+                        <div class="alert alert-success">
+                            ${data.message}
+                        </div>
+                    `;
+                    trainingLog.innerHTML += '학습이 시작되었습니다.<br>';
+                } else {
+                    trainingStatus.innerHTML = `
+                        <div class="alert alert-danger">
+                            <p>오류 발생</p>
+                            <p>${data.error}</p>
+                        </div>
+                    `;
+                    startTrainingBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                trainingStatus.innerHTML = `
+                    <div class="alert alert-danger">
+                        <p>오류 발생</p>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+                startTrainingBtn.disabled = false;
+            });
+        }
+        
+        // 학습 진행상황 업데이트 함수
+        function updateTrainingProgress(data) {
+            if (!data) return;
+            
+            if (data.status === 'error') {
+                trainingStatus.innerHTML = `
+                    <div class="alert alert-danger">
+                        <p>학습 오류</p>
+                        <p>${data.error_message}</p>
+                    </div>
+                `;
+                startTrainingBtn.disabled = false;
+                return;
+            }
+            
+            const currentEpoch = data.current_epoch || 0;
+            const totalEpochs = data.total_epochs || 1;
+            const accuracy = data.accuracy || 0;
+            const loss = data.loss || 0;
+            
+            // 진행률 계산
+            const progress = Math.round((currentEpoch / totalEpochs) * 100);
+            
+            // UI 업데이트
+            trainingProgress.style.width = `${progress}%`;
+            trainingProgress.textContent = `${progress}%`;
+            trainingProgress.setAttribute('aria-valuenow', progress);
+            
+            accuracyValue.textContent = `${(accuracy * 100).toFixed(2)}%`;
+            lossValue.textContent = loss.toFixed(4);
+            
+            // 로그 추가
+            if (currentEpoch > 0) {
+                trainingLog.innerHTML += `에폭 ${currentEpoch}/${totalEpochs}: 정확도=${(accuracy * 100).toFixed(2)}%, 손실=${loss.toFixed(4)}<br>`;
+                trainingLog.scrollTop = trainingLog.scrollHeight;
+            }
+            
+            // 학습 완료 처리
+            if (data.status === 'completed') {
+                trainingStatus.innerHTML = `
+                    <div class="alert alert-success">
+                        <p>학습 완료!</p>
+                        <p>모델명: ${data.model_name}</p>
+                        <p>최종 정확도: ${(accuracy * 100).toFixed(2)}%</p>
+                    </div>
+                `;
+                trainingLog.innerHTML += '학습이 완료되었습니다!<br>';
+                startTrainingBtn.disabled = false;
+                
+                // 페이지 새로고침 (새 모델이 목록에 표시되도록)
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            }
+        }
+    });
+</script>
+{% endblock %}

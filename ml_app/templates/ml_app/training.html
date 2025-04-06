@@ -1,0 +1,74 @@
+{% extends 'ml_app/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}모델 학습{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1>모델 학습</h1>
+        <p>업로드한 이미지를 사용하여 인공지능 모델을 학습합니다.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">학습 파라미터 설정</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary w-100" {% if not categories %}disabled{% endif %}>학습 시작하기</button>
+                    </div>
+                    
+                    {% if not categories %}
+                    <div class="alert alert-warning mt-3">
+                        <small>학습을 시작하기 전에 먼저 이미지를 업로드해주세요.</small>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">학습 데이터 정보</h5>
+            </div>
+            <div class="card-body">
+                {% if categories %}
+                <p>현재 학습 가능한 카테고리:</p>
+                <ul class="list-group mb-3">
+                    {% for category in categories %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ category.name }}
+                        <span class="badge bg-primary rounded-pill">{{ category.count_images }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                
+                <div class="alert alert-info">
+                    <small>
+                        <strong>학습 팁:</strong><br>
+                        - 각 카테고리별로 최소 10개 이상의 이미지를 권장합니다.<br>
+                        - 다양한 각도와 조명에서 촬영된 이미지를 사용하면 더 좋은 결과를 얻을 수 있습니다.<br>
+                        - 에포크가 많을수록 학습 시간이 길어지지만 더 정확한 모델을 만들 수 있습니다.
+                    </small>
+                </div>
+                {% else %}
+                <p class="text-center">학습할 데이터가 없습니다. 먼저 이미지를 업로드해주세요.</p>
+                <div class="text-center mt-3">
+                    <a href="{% url 'ml_app:upload' %}" class="btn btn-primary">이미지 업로드하기</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
