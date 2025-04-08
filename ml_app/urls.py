@@ -15,6 +15,9 @@ urlpatterns = [
     path('training/status/<str:training_id>/', views.training_status, name='training_status'),
     path('test/', views.test_view, name='test'),
     path('predict/', views.predict_image, name='predict_image'),
+    path('training-list/', views.training_list_view, name='training_list'),
+    path('models/', views.model_list_view, name='model_list'),
+    path('models/toggle/<int:model_id>/', views.toggle_model_status, name='toggle_model'),
 ]
 
 urlpatterns += websocket_urlpatterns

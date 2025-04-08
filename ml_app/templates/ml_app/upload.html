@@ -42,9 +42,10 @@
             </div>
             <div class="card-body">
                 {% if categories %}
-                <ul class="list-group">
+                <ul class="list-group" id="category-list">
                     {% for category in categories %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <li class="list-group-item d-flex justify-content-between align-items-center label-item" 
+                        data-label="{{ category.name }}" style="cursor: pointer;">
                         {{ category.name }}
                         <span class="badge bg-primary rounded-pill">{{ category.count_images }}</span>
                     </li>
@@ -69,6 +70,36 @@
     const uploadButton = document.getElementById('uploadButton');
     
     let selectedFile = null;
+    
+    // 라벨 항목 클릭 이벤트 설정
+    const labelItems = document.querySelectorAll('.label-item');
+    labelItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const labelName = this.getAttribute('data-label');
+            labelInput.value = labelName;
+            validateForm();
+            
+            // 시각적 피드백 추가
+            labelItems.forEach(li => li.classList.remove('active', 'bg-light'));
+            this.classList.add('active', 'bg-light');
+            
+            // 스크롤을 업로드 영역으로 이동 (모바일 화면에서 유용)
+            if (window.innerWidth < 768) {
+                document.querySelector('.card.mb-4').scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+        
+        // 호버 효과 추가
+        item.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#f8f9fa';
+        });
+        
+        item.addEventListener('mouseleave', function() {
+            if (!this.classList.contains('active')) {
+                this.style.backgroundColor = '';
+            }
+        });
+    });
     
     // 이벤트 리스너 추가
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {

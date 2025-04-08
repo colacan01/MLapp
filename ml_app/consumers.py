@@ -33,3 +33,12 @@ class TrainingConsumer(AsyncWebsocketConsumer):
             'type': 'training_update',
             'message': message
         }))
+        
+    async def training_error(self, event):
+        # 모델 훈련 오류 메시지를 클라이언트에 전송
+        message = event['message']
+        
+        await self.send(text_data=json.dumps({
+            'type': 'training_error',
+            'message': message
+        }))

@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 from .forms import ImageUploadForm, TrainingForm
 from .models import ImageCategory, TrainingImage, TrainedModel
@@ -110,6 +111,19 @@ def training_view(request):
     })
 
 def training_status(request, training_id):
+    # 오류 로그 파일 경로
+    error_log_path = os.path.join(settings.MEDIA_ROOT, 'models', training_id, 'error_log.txt')
+    
+    # 오류가 있는지 먼저 확인
+    if os.path.exists(error_log_path):
+        with open(error_log_path, 'r') as f:
+            error_message = f.read().strip()
+        
+        return JsonResponse({
+            'status': 'error',
+            'message': error_message
+        })
+    
     # 학습 상태 정보를 위한 JSON 파일 경로
     history_path = os.path.join(settings.MEDIA_ROOT, 'models', training_id, 'training_history.json')
     
@@ -205,3 +219,84 @@ def predict_image(request):
             pass
     
     return JsonResponse({'status': 'error', 'message': '잘못된 요청입니다'})
+
+def training_list_view(request):
+    # 카테고리 목록 가져오기
+    categories = ImageCategory.objects.all().order_by('name')
+    
+    # 카테고리 필터링
+    selected_category = request.GET.get('category')
+    if selected_category:
+        images = TrainingImage.objects.filter(category__name=selected_category).order_by('-uploaded_at')
+    else:
+        images = TrainingImage.objects.all().order_by('-uploaded_at')
+    
+    # 페이지네이션
+    paginator = Paginator(images, 20)  # 페이지당 20개 이미지
+    page = request.GET.get('page')
+    
+    try:
+        images_page = paginator.page(page)
+    except PageNotAnInteger:
+        # 페이지가 정수가 아니면 첫 페이지
+        images_page = paginator.page(1)
+    except EmptyPage:
+        # 페이지가 범위를 벗어나면 마지막 페이지
+        images_page = paginator.page(paginator.num_pages)
+    
+    context = {
+        'categories': categories,
+        'images': images_page,
+        'selected_category': selected_category,
+        'total_images': images.count(),
+    }
+    
+    return render(request, 'ml_app/training_list.html', context)
+
+def model_list_view(request):
+    # 모든 모델 가져오기
+    models = TrainedModel.objects.all()
+    
+    # 정확도 기준 최고 모델
+    best_model = models.order_by('-accuracy').first() if models.exists() else None
+    
+    # 활성 모델 가져오기
+    active_model = models.filter(is_active=True).first()
+    
+    context = {
+        'models': models,
+        'active_model': active_model,
+        'best_model': best_model,
+        'total_models': models.count(),
+    }
+    
+    return render(request, 'ml_app/model_list.html', context)
+
+@csrf_exempt
+def toggle_model_status(request, model_id):
+    if request.method == 'POST':
+        try:
+            model = TrainedModel.objects.get(pk=model_id)
+            
+            # 모델 상태 전환
+            model.is_active = not model.is_active
+            model.save()
+            
+            # 활성화된 경우 다른 모든 모델 비활성화
+            if model.is_active:
+                TrainedModel.objects.exclude(pk=model_id).update(is_active=False)
+            
+            return JsonResponse({
+                'status': 'success',
+                'active': model.is_active
+            })
+        except TrainedModel.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': '모델을 찾을 수 없습니다.'
+            })
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': '잘못된 요청입니다.'
+    })

@@ -1,0 +1,126 @@
+{% extends 'ml_app/base.html' %}
+
+{% block title %}학습 이미지 목록{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>학습 이미지 목록</h1>
+        <p class="lead">총 {{ total_images }}개의 이미지가 있습니다.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'ml_app:upload' %}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> 이미지 업로드
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">필터</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" action="{% url 'ml_app:training_list' %}">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-auto">
+                            <label for="category" class="col-form-label">카테고리:</label>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" id="category" name="category">
+                                <option value="">모든 카테고리</option>
+                                {% for category in categories %}
+                                <option value="{{ category.name }}" {% if selected_category == category.name %}selected{% endif %}>
+                                    {{ category.name }} ({{ category.count_images }}장)
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary">적용</button>
+                            {% if selected_category %}
+                            <a href="{% url 'ml_app:training_list' %}" class="btn btn-outline-secondary">필터 초기화</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {% if images %}
+        {% for image in images %}
+        <div class="col-md-3 mb-4">
+            <div class="card h-100">
+                <img src="{{ image.image.url }}" class="card-img-top" alt="{{ image.category.name }}" style="height: 200px; object-fit: cover;">
+                <div class="card-body">
+                    <h5 class="card-title">{{ image.category.name }}</h5>
+                    <p class="card-text">
+                        <small class="text-muted">업로드: {{ image.uploaded_at|date:"Y-m-d H:i" }}</small>
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                {% if selected_category %}
+                    <p>선택한 카테고리({{ selected_category }})에 이미지가 없습니다.</p>
+                {% else %}
+                    <p>업로드된 이미지가 없습니다. 이미지를 업로드해주세요.</p>
+                {% endif %}
+                <a href="{% url 'upload' %}" class="btn btn-primary">이미지 업로드하기</a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- 페이지네이션 -->
+{% if images.has_other_pages %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if images.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ images.previous_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link" aria-hidden="true">&laquo;</span>
+                </li>
+                {% endif %}
+                
+                {% for i in images.paginator.page_range %}
+                    {% if images.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ i }}{% if selected_category %}&category={{ selected_category }}{% endif %}">{{ i }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if images.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ images.next_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link" aria-hidden="true">&raquo;</span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

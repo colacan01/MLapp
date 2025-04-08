@@ -32,6 +32,18 @@ class TrainingProgressCallback(Callback):
                 }
             }
         )
+    
+    def send_error(self, error_message):
+        """오류 메시지를 클라이언트에 전송"""
+        async_to_sync(self.channel_layer.group_send)(
+            self.channel_name,
+            {
+                'type': 'training_error',
+                'message': {
+                    'error': error_message
+                }
+            }
+        )
 
 class ModelTrainer:
     def __init__(self, data_dir, model_dir, img_width=224, img_height=224):
@@ -146,6 +158,11 @@ class ModelTrainer:
         return train_generator, validation_generator, len(class_indices)
     
     def train_model(self, epochs=10, batch_size=32, learning_rate=0.001, validation_split=0.2, channel_name=None):
+        # 콜백 객체를 미리 생성 (오류 전송에 사용하기 위함)
+        progress_callback = None
+        if channel_name:
+            progress_callback = TrainingProgressCallback(channel_name)
+        
         try:
             # 데이터 준비
             train_generator, validation_generator, num_classes = self.prepare_data(batch_size, validation_split)
@@ -172,8 +189,8 @@ class ModelTrainer:
             ]
             
             # WebSocket을 통한 진행 상황 업데이트를 위한 콜백 추가
-            if channel_name:
-                callbacks.append(TrainingProgressCallback(channel_name))
+            if progress_callback:
+                callbacks.append(progress_callback)
             
             # steps_per_epoch와 validation_steps 계산 시 안전하게 처리
             steps_per_epoch = max(1, train_generator.samples // batch_size)
@@ -203,10 +220,18 @@ class ModelTrainer:
             return history.history, self.model
         
         except Exception as e:
-            print(f"학습 중 오류 발생: {e}")
+            error_message = str(e)
+            print(f"학습 중 오류 발생: {error_message}")
+            
             # 오류 정보를 파일로 저장
             with open(os.path.join(self.model_dir, 'error_log.txt'), 'w') as f:
-                f.write(f"학습 오류: {str(e)}\n")
+                f.write(f"학습 오류: {error_message}\n")
+            
+            # WebSocket을 통해 오류 전송
+            if progress_callback:
+                progress_callback.send_error(error_message)
+            
+            # 오류를 다시 발생시켜 호출자에게 전파
             raise
     
     def start_training_thread(self, epochs=10, batch_size=32, learning_rate=0.001, validation_split=0.2, channel_name=None):

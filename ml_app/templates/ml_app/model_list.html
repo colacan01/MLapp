@@ -1,0 +1,176 @@
+{% extends 'ml_app/base.html' %}
+
+{% block title %}학습 모델 목록{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>학습 모델 목록</h1>
+        <p class="lead">총 {{ total_models }}개의 학습된 모델이 있습니다.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'ml_app:training' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 새 모델 학습
+        </a>
+    </div>
+</div>
+
+{% if models %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">현재 활성 모델</h5>
+            </div>
+            <div class="card-body">
+                {% if active_model %}
+                <h3>{{ active_model.name }}</h3>
+                <p class="mb-2">정확도: <span class="badge bg-success">{{ active_model.accuracy|floatformat:2 }}%</span></p>
+                <p class="mb-2">생성일: {{ active_model.created_at|date:"Y-m-d H:i" }}</p>
+                <a href="{% url 'ml_app:test' %}" class="btn btn-primary mt-2">이 모델로 이미지 테스트</a>
+                {% else %}
+                <div class="alert alert-warning">
+                    <p>현재 활성화된 모델이 없습니다. 아래 모델 목록에서 모델을 활성화해주세요.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">최고 성능 모델</h5>
+            </div>
+            <div class="card-body">
+                {% if best_model %}
+                <h3>{{ best_model.name }}</h3>
+                <p class="mb-2">정확도: <span class="badge bg-info">{{ best_model.accuracy|floatformat:2 }}%</span></p>
+                <p class="mb-2">생성일: {{ best_model.created_at|date:"Y-m-d H:i" }}</p>
+                <p class="mb-0">상태: 
+                    {% if best_model.is_active %}
+                    <span class="badge bg-success">활성</span>
+                    {% else %}
+                    <span class="badge bg-secondary">비활성</span>
+                    {% endif %}
+                </p>
+                {% if not best_model.is_active %}
+                <button class="btn btn-success mt-2 toggle-model" data-model-id="{{ best_model.id }}">
+                    이 모델 활성화
+                </button>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-warning">
+                    <p>학습된 모델이 없습니다.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">모든 모델 목록</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>모델 이름</th>
+                        <th>정확도</th>
+                        <th>생성일</th>
+                        <th>상태</th>
+                        <th>작업</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for model in models %}
+                    <tr>
+                        <td>{{ model.name }}</td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar {% if model.accuracy >= 0.8 %}bg-success{% elif model.accuracy >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ model.accuracy|floatformat:2 }}%" 
+                                     aria-valuenow="{{ model.accuracy|floatformat:2 }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {{ model.accuracy|floatformat:2 }}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ model.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {% if model.is_active %}
+                            <span class="badge bg-success">활성</span>
+                            {% else %}
+                            <span class="badge bg-secondary">비활성</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm {% if model.is_active %}btn-danger{% else %}btn-success{% endif %} toggle-model" 
+                                    data-model-id="{{ model.id }}">
+                                {% if model.is_active %}비활성화{% else %}활성화{% endif %}
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <h4 class="alert-heading">학습된 모델이 없습니다</h4>
+    <p>아직 학습된 모델이 없습니다. 모델을 학습시켜보세요.</p>
+    <hr>
+    <a href="{% url 'ml_app:training' %}" class="btn btn-primary">모델 학습하기</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 모델 상태 토글 버튼에 이벤트 리스너 추가
+        const toggleButtons = document.querySelectorAll('.toggle-model');
+        
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const modelId = this.getAttribute('data-model-id');
+                
+                // 버튼 상태 변경
+                this.disabled = true;
+                const originalText = this.textContent;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 처리 중...';
+                
+                // AJAX 요청
+                fetch(`/ml_app/models/toggle/${modelId}/`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // 성공적으로 처리된 경우 페이지 새로고침
+                        location.reload();
+                    } else {
+                        // 오류 발생 시 알림
+                        alert('오류가 발생했습니다: ' + data.message);
+                        this.disabled = false;
+                        this.textContent = originalText;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('처리 중 오류가 발생했습니다.');
+                    this.disabled = false;
+                    this.textContent = originalText;
+                });
+            });
+        });
+    });
+</script>
+{% endblock %}
